@@ -1,0 +1,51 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "crestview-lunch-menu",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-01",
+  "compatibility_flags": [],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./public",
+  },
+  "observability": {
+    "enabled": true,
+  },
+  "r2_buckets": [
+    {
+      "binding": "MENU_DATA",
+      "bucket_name": "lunch-menus",
+    },
+  ],
+  "routes": [
+    {
+      "pattern": "bvsd-menus.bendb.com",
+      "custom_domain": true,
+    },
+  ],
+  "triggers": {
+    "crons": [
+      // Run at 8:00 AM UTC every day
+      "0 8 * * *",
+    ],
+  },
+  "vars": {
+    "ENVIRONMENT": "production",
+  },
+  /**
+   * Smart Placement
+   * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
+   */
+  // "placement": { "mode": "smart" },
+
+  /**
+   * Bindings
+   * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
+   * databases, object storage, AI inference, real-time communication and more.
+   * https://developers.cloudflare.com/workers/runtime-apis/bindings/
+   */
+}

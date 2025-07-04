@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.wrangler/
+*.html
+*.md
+package-lock.json
+wrangler.toml
+*.log 
