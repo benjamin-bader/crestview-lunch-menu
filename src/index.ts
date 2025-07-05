@@ -179,54 +179,6 @@ app.get("/health", (c) => {
   });
 });
 
-const breakfastContent = (menu: DailyMenu) => {
-  return html`
-    <div>
-      <span class="title">Breakfast</span>
-      ${menu.menuItems.map((item) => html`<div>${item.name}</div>`)}
-    </div>
-  `;
-};
-
-const lunchContent = (menu: DailyMenu) => {
-  return html`
-    <div>
-      <span class="title">Lunch</span>
-      ${menu.menuItems.map((item) => html`<div>${item.name}</div>`)}
-    </div>
-  `;
-};
-
-const snackContent = (menu: DailyMenu) => {
-  return html`
-    <div>
-      <span class="title">Snack</span>
-      ${menu.menuItems.map((item) => html`<div>${item.name}</div>`)}
-    </div>
-  `;
-};
-
-const mealDayContent = (meals: DailyMeals) => {
-  const sections = [];
-
-  // Add breakfast if it exists and has items
-  if (meals.breakfast && meals.breakfast.menuItems.length > 0) {
-    sections.push(breakfastContent(meals.breakfast));
-  }
-
-  // Add lunch if it exists and has items
-  if (meals.lunch && meals.lunch.menuItems.length > 0) {
-    sections.push(lunchContent(meals.lunch));
-  }
-
-  // Add snack if it exists and has items
-  if (meals.snack && meals.snack.menuItems.length > 0) {
-    sections.push(snackContent(meals.snack));
-  }
-
-  return html` ${sections} `;
-};
-
 // Helper function to get the date for a specific weekday in the weekly menu
 function getDateForWeekday(weeklyMenu: WeeklyMenu, weekday: Weekday): Date {
   // WeeklyMenu.startDate is always Monday (weekday 1)
@@ -296,13 +248,67 @@ const halfVerticalLayout = (menu: WeeklyMenu) => html`
   </div>
 `;
 
-const quadrantLayout = (menu: WeeklyMenu) => html`
-  <div class="layout layout--top"></div>
+// Helper function to determine which weekday to show for quadrant layout
+function getQuadrantWeekday(date: Date): Weekday {
+  const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
 
-  <div class="title_bar">
-    <span class="title">BVSD Lunch Menu - Crest View Elementary</span>
-  </div>
-`;
+  // If it's weekend (Saturday or Sunday), show next Monday
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    return Weekday.MONDAY;
+  }
+
+  // Otherwise, show current day (convert JS day to our Weekday enum)
+  // JS: 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday
+  // Our enum: 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday
+  return dayOfWeek as Weekday;
+}
+
+// Helper function to create a column for quadrant layout with specific styling
+function createQuadrantColumn(weeklyMenu: WeeklyMenu, weekday: Weekday) {
+  const weekdayName = getWeekdayName(weekday);
+  const date = getDateForWeekday(weeklyMenu, weekday);
+  const formattedDate = format(date, "M/d");
+  const meals = weeklyMenu.getMealsByWeekday(weekday);
+
+  return html`
+    <div class="column">
+      <div class="flex gap--small">
+        <span class="title">${weekdayName}</span>
+        <span class="description">${formattedDate}</span>
+      </div>
+      ${meals.breakfast && meals.breakfast.menuItems.length > 0
+        ? html`
+            <span class="title title--small">Breakfast</span>
+            <span class="description clamp--1">${meals.breakfast.menuItems.map((item) => item.name).join(" or ")}</span>
+          `
+        : html`
+            <span class="title title--small">Breakfast</span>
+            <span class="description clamp--1">&lt;No data&gt;</span>
+          `}
+      ${meals.lunch && meals.lunch.menuItems.length > 0
+        ? html`
+            <span class="title title--small">Lunch</span>
+            ${meals.lunch.menuItems.map((item) => html`<div class="description clamp--1">${item.name}</div>`)}
+          `
+        : html`
+            <span class="title title--small">Lunch</span>
+            <div class="description clamp--1">&lt;No data&gt;</div>
+          `}
+    </div>
+  `;
+}
+
+const quadrantLayout = (menu: WeeklyMenu) => {
+  const targetWeekday = getQuadrantWeekday(currentDate());
+
+  return html`
+    <div class="columns layout layout--stretch-y">${createQuadrantColumn(menu, targetWeekday)}</div>
+
+    <div class="title_bar">
+      <span class="title">BVSD Lunch Menu - Crest View Elementary</span>
+    </div>
+  `;
+};
 
 app.get("/api/debug-layout", async (c) => {
   const scraper = new StreamingScraper();
