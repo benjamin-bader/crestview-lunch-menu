@@ -311,7 +311,7 @@ app.post("/api/markup", async (c) => {
   let monthlyMenu: MonthlyMenu;
   try {
     const monthlyMenuData = await monthlyMenuJson.json();
-    monthlyMenu = new MonthlyMenu(monthlyMenuData as any);
+    monthlyMenu = MonthlyMenu.fromJSON(monthlyMenuData);
   } catch (error) {
     console.error("Error parsing menu data", error);
     return c.json({ error: "Error parsing menu data" }, 500);

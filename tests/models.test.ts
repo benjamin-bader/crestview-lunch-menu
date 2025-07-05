@@ -1,4 +1,4 @@
-import { MonthlyMenu, WeeklyMenu, MealType } from "../src/models";
+import { MonthlyMenu, WeeklyMenu, DailyMenu, MenuItem, MealType, FoodCategory } from "../src/models";
 
 describe("MonthlyMenu", () => {
   describe("getWeeklyMenuForDate", () => {
@@ -196,6 +196,163 @@ describe("MonthlyMenu", () => {
         const result = yearEndMenu.getWeeklyMenuForDate(newYearEve);
         expect(result).toBeNull(); // No following week in this monthly menu
       });
+    });
+  });
+
+  describe("fromJSON static methods", () => {
+    it("should properly reconstruct MenuItem from JSON", () => {
+      const menuItemData = {
+        name: "Pizza",
+        description: "Cheese pizza",
+        category: FoodCategory.MAIN_ENTREE,
+        isVegetarian: true,
+        isVegan: false,
+        allergens: ["dairy"],
+        nutritionalInfo: { calories: 300 },
+      };
+
+      const menuItem = MenuItem.fromJSON(menuItemData);
+      expect(menuItem).toBeInstanceOf(MenuItem);
+      expect(menuItem.name).toBe("Pizza");
+      expect(menuItem.description).toBe("Cheese pizza");
+      expect(menuItem.category).toBe(FoodCategory.MAIN_ENTREE);
+      expect(menuItem.isVegetarian).toBe(true);
+      expect(menuItem.isVegan).toBe(false);
+      expect(menuItem.allergens).toEqual(["dairy"]);
+      expect(menuItem.nutritionalInfo).toEqual({ calories: 300 });
+    });
+
+    it("should properly reconstruct DailyMenu from JSON", () => {
+      const dailyMenuData = {
+        date: "2024-01-01",
+        mealType: MealType.LUNCH,
+        menuItems: [
+          {
+            name: "Pizza",
+            category: FoodCategory.MAIN_ENTREE,
+            isVegetarian: true,
+          },
+        ],
+        specialNotes: ["Note 1"],
+        isSchoolDay: true,
+      };
+
+      const dailyMenu = DailyMenu.fromJSON(dailyMenuData);
+      expect(dailyMenu).toBeInstanceOf(DailyMenu);
+      expect(dailyMenu.mealType).toBe(MealType.LUNCH);
+      expect(dailyMenu.menuItems).toHaveLength(1);
+      expect(dailyMenu.menuItems[0]).toBeInstanceOf(MenuItem);
+      expect(dailyMenu.menuItems[0].name).toBe("Pizza");
+      expect(dailyMenu.specialNotes).toEqual(["Note 1"]);
+      expect(dailyMenu.isSchoolDay).toBe(true);
+    });
+
+    it("should properly reconstruct WeeklyMenu from JSON", () => {
+      const weeklyMenuData = {
+        startDate: "2024-01-01",
+        endDate: "2024-01-07",
+        dailyMenus: [
+          {
+            date: "2024-01-01",
+            mealType: MealType.LUNCH,
+            menuItems: [
+              {
+                name: "Pizza",
+                category: FoodCategory.MAIN_ENTREE,
+              },
+            ],
+          },
+        ],
+      };
+
+      const weeklyMenu = WeeklyMenu.fromJSON(weeklyMenuData);
+      expect(weeklyMenu).toBeInstanceOf(WeeklyMenu);
+      expect(weeklyMenu.dailyMenus).toHaveLength(1);
+      expect(weeklyMenu.dailyMenus[0]).toBeInstanceOf(DailyMenu);
+      expect(weeklyMenu.dailyMenus[0].menuItems[0]).toBeInstanceOf(MenuItem);
+      expect(weeklyMenu.dailyMenus[0].menuItems[0].name).toBe("Pizza");
+    });
+
+    it("should properly reconstruct MonthlyMenu from JSON", () => {
+      const monthlyMenuData = {
+        year: 2024,
+        month: 1,
+        weeklyMenus: [
+          {
+            startDate: "2024-01-01",
+            endDate: "2024-01-07",
+            dailyMenus: [
+              {
+                date: "2024-01-01",
+                mealType: MealType.LUNCH,
+                menuItems: [
+                  {
+                    name: "Pizza",
+                    category: FoodCategory.MAIN_ENTREE,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const monthlyMenu = MonthlyMenu.fromJSON(monthlyMenuData);
+      expect(monthlyMenu).toBeInstanceOf(MonthlyMenu);
+      expect(monthlyMenu.year).toBe(2024);
+      expect(monthlyMenu.month).toBe(1);
+      expect(monthlyMenu.weeklyMenus).toHaveLength(1);
+      expect(monthlyMenu.weeklyMenus[0]).toBeInstanceOf(WeeklyMenu);
+      expect(monthlyMenu.weeklyMenus[0].dailyMenus[0]).toBeInstanceOf(DailyMenu);
+      expect(monthlyMenu.weeklyMenus[0].dailyMenus[0].menuItems[0]).toBeInstanceOf(MenuItem);
+      expect(monthlyMenu.weeklyMenus[0].dailyMenus[0].menuItems[0].name).toBe("Pizza");
+    });
+
+    it("should handle JSON serialization/deserialization round-trip", () => {
+      const originalMonthlyMenu = new MonthlyMenu({
+        year: 2024,
+        month: 1,
+        weeklyMenus: [
+          new WeeklyMenu({
+            startDate: "2024-01-01",
+            endDate: "2024-01-07",
+            dailyMenus: [
+              new DailyMenu({
+                date: "2024-01-01",
+                mealType: MealType.LUNCH,
+                menuItems: [
+                  new MenuItem({
+                    name: "Pizza",
+                    category: FoodCategory.MAIN_ENTREE,
+                    isVegetarian: true,
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+      });
+
+      // Convert to JSON and back
+      const jsonString = JSON.stringify(originalMonthlyMenu.toJSON());
+      const parsedData = JSON.parse(jsonString);
+      const reconstructedMonthlyMenu = MonthlyMenu.fromJSON(parsedData);
+
+      // Verify the reconstructed menu has all the methods
+      expect(reconstructedMonthlyMenu).toBeInstanceOf(MonthlyMenu);
+      expect(reconstructedMonthlyMenu.getWeeklyMenuForDate).toBeInstanceOf(Function);
+
+      const weeklyMenu = reconstructedMonthlyMenu.weeklyMenus[0];
+      expect(weeklyMenu).toBeInstanceOf(WeeklyMenu);
+      expect(weeklyMenu.getMealsByWeekday).toBeInstanceOf(Function);
+
+      const dailyMenu = weeklyMenu.dailyMenus[0];
+      expect(dailyMenu).toBeInstanceOf(DailyMenu);
+      expect(dailyMenu.addMenuItem).toBeInstanceOf(Function);
+
+      const menuItem = dailyMenu.menuItems[0];
+      expect(menuItem).toBeInstanceOf(MenuItem);
+      expect(menuItem.name).toBe("Pizza");
     });
   });
 });

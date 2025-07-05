@@ -90,6 +90,11 @@ export class MenuItem {
       nutritionalInfo: this.nutritionalInfo,
     };
   }
+
+  // JSON deserialization helper
+  static fromJSON(data: any): MenuItem {
+    return new MenuItem(data);
+  }
 }
 
 export interface DailyMenuData {
@@ -141,6 +146,17 @@ export class DailyMenu {
       specialNotes: this.specialNotes,
       isSchoolDay: this.isSchoolDay,
     };
+  }
+
+  // JSON deserialization helper
+  static fromJSON(data: any): DailyMenu {
+    return new DailyMenu({
+      date: data.date,
+      mealType: data.mealType,
+      menuItems: data.menuItems ? data.menuItems.map((item: any) => MenuItem.fromJSON(item)) : [],
+      specialNotes: data.specialNotes,
+      isSchoolDay: data.isSchoolDay,
+    });
   }
 }
 
@@ -255,6 +271,15 @@ export class WeeklyMenu {
       dailyMenus: this.dailyMenus.map((menu) => menu.toJSON()),
     };
   }
+
+  // JSON deserialization helper
+  static fromJSON(data: any): WeeklyMenu {
+    return new WeeklyMenu({
+      startDate: data.startDate,
+      endDate: data.endDate,
+      dailyMenus: data.dailyMenus ? data.dailyMenus.map((menu: any) => DailyMenu.fromJSON(menu)) : [],
+    });
+  }
 }
 
 export interface MonthlyMenuData {
@@ -324,6 +349,15 @@ export class MonthlyMenu {
       month: this.month,
       weeklyMenus: this.weeklyMenus.map((menu) => menu.toJSON()),
     };
+  }
+
+  // JSON deserialization helper
+  static fromJSON(data: any): MonthlyMenu {
+    return new MonthlyMenu({
+      year: data.year,
+      month: data.month,
+      weeklyMenus: data.weeklyMenus ? data.weeklyMenus.map((menu: any) => WeeklyMenu.fromJSON(menu)) : [],
+    });
   }
 }
 
