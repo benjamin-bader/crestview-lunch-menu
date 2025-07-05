@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { html } from "hono/html";
-import { MealType, DailyMenu, DailyMeals, MonthlyMenu, TrmnlUser, Weekday, WeeklyMenu } from "./models";
+import { MealType, DailyMenu, DailyMeals, MonthlyMenu, TrmnlUser, Weekday, WeeklyMenu, getWeekdayName } from "./models";
 import { StreamingScraper } from "./streaming_scraper";
+import { format, addDays } from "date-fns";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
@@ -226,30 +227,52 @@ const mealDayContent = (meals: DailyMeals) => {
   return html` ${sections} `;
 };
 
-function tableRow(menu: WeeklyMenu, weekday: Weekday) {
-  const meals = menu.getMealsByWeekday(weekday);
-  return html` <td>${mealDayContent(meals)}</td> `;
+// Helper function to get the date for a specific weekday in the weekly menu
+function getDateForWeekday(weeklyMenu: WeeklyMenu, weekday: Weekday): Date {
+  // WeeklyMenu.startDate is always Monday (weekday 1)
+  // Calculate the offset from Monday to the target weekday
+  const mondayOffset = weekday - 1; // Monday = 1, so offset is 0 for Monday
+  return addDays(weeklyMenu.startDate, mondayOffset);
+}
+
+// Helper function to create a column for a specific weekday
+function createWeekdayColumn(weeklyMenu: WeeklyMenu, weekday: Weekday) {
+  const weekdayName = getWeekdayName(weekday);
+  const date = getDateForWeekday(weeklyMenu, weekday);
+  const formattedDate = format(date, "MMM d");
+  const meals = weeklyMenu.getMealsByWeekday(weekday);
+
+  return html`
+    <div class="column">
+      <span class="title">${weekdayName}</span>
+      <span class="description">${formattedDate}</span>
+      ${meals.breakfast && meals.breakfast.menuItems.length > 0
+        ? html`
+            <span class="title title--small">Breakfast</span>
+            ${meals.breakfast.menuItems.map((item) => html`<div>${item.name}</div>`)}
+          `
+        : html`
+            <span class="title title--small">Breakfast</span>
+            <div>&lt;No data&gt;</div>
+          `}
+      ${meals.lunch && meals.lunch.menuItems.length > 0
+        ? html`
+            <span class="title title--small">Lunch</span>
+            ${meals.lunch.menuItems.map((item) => html`<div>${item.name}</div>`)}
+          `
+        : html`
+            <span class="title title--small">Lunch</span>
+            <div>&lt;No data&gt;</div>
+          `}
+    </div>
+  `;
 }
 
 const fullLayout = (menu: WeeklyMenu) => html`
-  <div class="layout layout--stretch">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Monday</th>
-          <th>Tuesday</th>
-          <th>Wednesday</th>
-          <th>Thursday</th>
-          <th>Friday</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          ${tableRow(menu, Weekday.MONDAY)} ${tableRow(menu, Weekday.TUESDAY)} ${tableRow(menu, Weekday.WEDNESDAY)}
-          ${tableRow(menu, Weekday.THURSDAY)} ${tableRow(menu, Weekday.FRIDAY)}
-        </tr>
-      </tbody>
-    </table>
+  <div class="layout layout--stretch-y columns text--center">
+    ${createWeekdayColumn(menu, Weekday.MONDAY)} ${createWeekdayColumn(menu, Weekday.TUESDAY)}
+    ${createWeekdayColumn(menu, Weekday.WEDNESDAY)} ${createWeekdayColumn(menu, Weekday.THURSDAY)}
+    ${createWeekdayColumn(menu, Weekday.FRIDAY)}
   </div>
 
   <div class="title_bar">
