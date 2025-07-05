@@ -283,7 +283,7 @@ app.get("/api/debug-layout", async (c) => {
 
 app.post("/api/markup", async (c) => {
   const token = c.req.header("Authorization");
-  const uuid = c.req.param("uuid");
+  const uuid = c.req.query("uuid");
 
   if (!token || !uuid) {
     return c.json({ error: "Unauthorized" }, 401);
