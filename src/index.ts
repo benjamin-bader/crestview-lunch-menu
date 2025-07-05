@@ -8,6 +8,19 @@ const app = new Hono<{ Bindings: CloudflareBindings }>();
 const MENU_PATH = "menus/cve.json";
 const MARKUP_PATH = "markup/cve.json";
 
+let FAKE_NOW: Date | null = null;
+
+const currentDate = () => FAKE_NOW || new Date();
+
+app.use("*", async (c, next) => {
+  const maybeNow = c.req.query("now");
+  if (maybeNow) {
+    FAKE_NOW = new Date(maybeNow);
+  }
+
+  return next();
+});
+
 app.get("/api/install", async (c) => {
   const code = c.req.query("code");
   const callbackUrl = c.req.query("installation_callback_url");
@@ -161,7 +174,7 @@ app.get("/debug/streaming/:date", async (c) => {
 app.get("/health", (c) => {
   return c.json({
     status: "healthy",
-    timestamp: new Date().toISOString(),
+    timestamp: currentDate().toISOString(),
   });
 });
 
@@ -304,9 +317,9 @@ app.post("/api/markup", async (c) => {
     return c.json({ error: "Error parsing menu data" }, 500);
   }
 
-  const menu = monthlyMenu.getWeeklyMenuForDate(new Date());
+  const menu = monthlyMenu.getWeeklyMenuForDate(currentDate());
   if (!menu) {
-    console.error("No weekly menu found for date", new Date());
+    console.error("No weekly menu found for date", currentDate());
     return c.json({ error: "No weekly menu found" }, 404);
   }
 
@@ -325,7 +338,7 @@ export default {
   async scheduled(event: ScheduledEvent, env: Cloudflare.Env, ctx: ExecutionContext) {
     try {
       const scraper = new StreamingScraper();
-      const monthlyMenu = await scraper.fetchAllMealsForDateAjax(new Date());
+      const monthlyMenu = await scraper.fetchAllMealsForDateAjax(currentDate());
       if (monthlyMenu) {
         await env.MENU_DATA.put(MENU_PATH, JSON.stringify(monthlyMenu));
       } else {
