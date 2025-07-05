@@ -9,7 +9,6 @@
     "test:watch": "jest --watch"
   },
   "dependencies": {
-    "@std/msgpack": "npm:@jsr/std__msgpack@^1.0.3",
     "date-fns": "^4.1.0",
     "hono": "^4.8.4"
   },

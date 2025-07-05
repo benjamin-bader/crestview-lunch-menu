@@ -10,7 +10,7 @@ const MENU_PATH = "menus/cve.json";
 const MARKUP_PATH = "markup/cve.json";
 
 app.get("/api/install", async (c) => {
-  const code = c.req.query("code")
+  const code = c.req.query("code");
   const callbackUrl = c.req.query("installation_callback_url");
 
   const body = {
@@ -25,7 +25,7 @@ app.get("/api/install", async (c) => {
     method: "POST",
     body: JSON.stringify(body),
   });
-  
+
   const data: Record<string, any> = await response.json();
   const accessToken = data["access_token"] as string;
 });
@@ -49,7 +49,7 @@ app.post("/api/seed/:date", async (c) => {
   const scraper = new StreamingScraper();
   const monthlyMenu = await scraper.fetchAllMealsForDateAjax(targetDate);
   if (monthlyMenu) {
-    await c.env.MENU_DATA.put(MENU_PATH, msgpack.encode(monthlyMenu.toJSON() as msgpack.ValueMap));
+    await c.env.MENU_DATA.put(MENU_PATH, JSON.stringify(monthlyMenu));
   }
 
   return c.json({ success: monthlyMenu ? true : false });
@@ -327,7 +327,7 @@ export default {
       const scraper = new StreamingScraper();
       const monthlyMenu = await scraper.fetchAllMealsForDateAjax(new Date());
       if (monthlyMenu) {
-        await env.MENU_DATA.put(MENU_PATH, msgpack.encode(monthlyMenu.toJSON() as msgpack.ValueMap));
+        await env.MENU_DATA.put(MENU_PATH, JSON.stringify(monthlyMenu));
       } else {
         console.log("No menu found for scheduled run");
       }
