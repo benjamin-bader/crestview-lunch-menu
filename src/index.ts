@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { html } from "hono/html";
 import { MealType, DailyMenu, DailyMeals, MonthlyMenu, TrmnlUser, Weekday, WeeklyMenu } from "./models";
 import { StreamingScraper } from "./streaming_scraper";
-import * as msgpack from "@std/msgpack";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
@@ -298,7 +297,8 @@ app.post("/api/markup", async (c) => {
 
   let monthlyMenu: MonthlyMenu;
   try {
-    monthlyMenu = await monthlyMenuJson.json();
+    const monthlyMenuData = await monthlyMenuJson.json();
+    monthlyMenu = new MonthlyMenu(monthlyMenuData as any);
   } catch (error) {
     console.error("Error parsing menu data", error);
     return c.json({ error: "Error parsing menu data" }, 500);
