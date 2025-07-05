@@ -9,161 +9,6 @@
 import { startOfWeek, endOfWeek, format, isSameWeek } from "date-fns";
 import { MealType, FoodCategory, MenuItem, MenuItemData, DailyMenu, WeeklyMenu, MonthlyMenu } from "./models";
 
-// Raw data interfaces for state management
-interface DayBoxData {
-  date?: string; // ISO date string
-  mealType: MealType;
-  menuItems: MenuItemData[];
-}
-
-/**
- * State management for streaming HTML parsing
- */
-class ScraperState {
-  private currentDayBox: DayBoxData | null = null;
-  private currentMenuItem: MenuItemData | null = null;
-  private completedDays: DailyMenu[] = [];
-
-  constructor(private mealType: MealType) {}
-
-  // Day box management
-  startDayBox(): void {
-    // Complete the previous day box if we have one
-    this.completePreviousDayBox();
-
-    // Start a new day box
-    this.currentDayBox = {
-      mealType: this.mealType,
-      menuItems: [],
-    };
-  }
-
-  private completePreviousDayBox(): void {
-    if (this.currentDayBox) {
-      // Complete the day box if we have a valid date AND menu items
-      if (this.currentDayBox.date && this.currentDayBox.menuItems.length > 0) {
-        const dailyMenu = new DailyMenu({
-          date: this.currentDayBox.date,
-          mealType: this.currentDayBox.mealType,
-          menuItems: this.currentDayBox.menuItems.map((itemData) => new MenuItem(itemData)),
-        });
-        this.completedDays.push(dailyMenu);
-      }
-    }
-  }
-
-  endDayBox(): void {
-    this.completePreviousDayBox();
-    this.currentDayBox = null;
-  }
-
-  // Date information
-  setDateInfo(date: Date): void {
-    if (this.currentDayBox) {
-      this.currentDayBox.date = format(date, "yyyy-MM-dd");
-    }
-  }
-
-  // Menu item management
-  startMenuItem(): void {
-    // Complete previous menu item if we have one
-    this.completePreviousMenuItem();
-
-    // Start new menu item
-    this.currentMenuItem = {
-      name: "",
-      description: "",
-      category: FoodCategory.OTHER,
-      allergens: [],
-      nutritionalInfo: {},
-    };
-  }
-
-  private completePreviousMenuItem(): void {
-    if (this.currentMenuItem && this.currentDayBox && this.currentMenuItem.name) {
-      this.currentDayBox.menuItems.push({
-        name: this.currentMenuItem.name,
-        description: this.currentMenuItem.description || this.currentMenuItem.name,
-        category: this.currentMenuItem.category,
-        allergens: this.currentMenuItem.allergens,
-        nutritionalInfo: this.currentMenuItem.nutritionalInfo,
-      });
-    }
-  }
-
-  endMenuItem(): void {
-    this.completePreviousMenuItem();
-    this.currentMenuItem = null;
-  }
-
-  // Menu item properties
-  setMenuItemCategory(category: FoodCategory): void {
-    if (this.currentMenuItem) {
-      this.currentMenuItem.category = category;
-    }
-  }
-
-  setMenuItemTitle(title: string): void {
-    if (this.currentMenuItem) {
-      // Filter out administrative announcements and non-food items
-      const lowerTitle = title.toLowerCase();
-      const isAdminAnnouncement =
-        lowerTitle.includes("no school") ||
-        lowerTitle.includes("winter break") ||
-        lowerTitle.includes("last day of school") ||
-        lowerTitle.includes("memorial day") ||
-        lowerTitle.includes("teacher") ||
-        lowerTitle.includes("spring break");
-
-      if (isAdminAnnouncement) {
-        // Skip administrative announcements - reset current menu item
-        this.currentMenuItem = null;
-        return;
-      }
-
-      const { name, description } = this.parseMenuItemText(title);
-      this.currentMenuItem.name = name;
-      this.currentMenuItem.description = description;
-    }
-  }
-
-  // Get completed results
-  getCompletedDays(): DailyMenu[] {
-    return this.completedDays;
-  }
-
-  // Force completion of current state (for HTMLRewriter cleanup)
-  endCurrentMenuItem(): void {
-    this.endMenuItem();
-  }
-
-  endCurrentDayBox(): void {
-    this.endDayBox();
-  }
-
-  // Helper method (fixed to not truncate on '&' characters)
-  private parseMenuItemText(text: string): {
-    name: string;
-    description: string;
-  } {
-    // Clean up HTML entities
-    const cleanText = text.replace(/&amp;/g, "&").replace(/&#39;/g, "'");
-
-    // Only split on "with" to separate main dish from sides
-    // Don't split on "&" as it's often part of the dish name (e.g., "Chicken & Waffles")
-    const parts = cleanText.split(/\s+with\s+/);
-
-    if (parts.length > 1) {
-      const name = parts[0].trim();
-      // Use the full text as description to preserve all information
-      return { name, description: cleanText };
-    } else {
-      // For items without "with", use the full text as both name and description
-      return { name: cleanText, description: cleanText };
-    }
-  }
-}
-
 export class StreamingScraper {
   private readonly ajaxBaseUrl: string;
   private readonly ajaxEndpoints: Record<MealType, string>;
@@ -273,22 +118,132 @@ export class StreamingScraper {
 
   /**
    * Parse calendar HTML fragment using HTMLRewriter
+   *
+   * HTMLRewriter processes HTML elements in document order as they appear in the stream.
+   * The handlers work together to build menu data by maintaining state across multiple
+   * nested elements. Here's how the parsing flow works:
+   *
+   * HTML Structure & Handler Flow:
+   * ```
+   * <div class="fsCalendarDaybox fsStateHasEvents">           ← 1. Start new day box
+   *   <div class="fsCalendarDate" data-day="7" data-month="2"> ← 2. Set date for day box
+   *     <span class="fsCalendarDay">Friday,</span>
+   *     <span class="fsCalendarMonth">March</span> 7
+   *   </div>
+   *   <div class="fsCalendarInfo">                            ← 3. Start new menu item
+   *     <span class="fsElementEventColorIcon"                 ← 4. Set item category
+   *           style="background:#BC0945">
+   *     </span>
+   *     <a class="fsCalendarEventTitle"                       ← 5. Set item name/description
+   *        title="Moe's Bagel with Plain Cream Cheese...">
+   *       Moe's Bagel...
+   *     </a>
+   *   </div>
+   *   <div class="fsCalendarInfo">                            ← 6. Start another menu item
+   *     <!-- More menu items... -->
+   *   </div>
+   * </div>
+   * <div class="fsCalendarDaybox fsStateHasEvents">           ← 7. Complete previous day box,
+   *   <!-- Next day's data -->                                    start new day box
+   * </div>
+   * ```
+   *
+   * Handler Execution Order:
+   * 1. **fsCalendarDaybox**: Triggers when a day container starts
+   *    - Completes and saves the previous day box if it exists
+   *    - Only starts a new day box if `fsStateHasEvents` class is present
+   *    - Skips weekend boxes (`fsCalendarWeekendDayBox`)
+   *
+   * 2. **fsCalendarDate**: Triggers when date information is found
+   *    - Extracts day, month, year from data attributes
+   *    - Sets the date on the current day box (if one exists)
+   *    - Handles zero-based months (0=January, 1=February, etc.)
+   *
+   * 3. **fsCalendarInfo**: Triggers when a menu item container starts
+   *    - Completes and saves the previous menu item if it exists
+   *    - Starts a new menu item within the current day box
+   *    - Multiple fsCalendarInfo elements can exist per day
+   *
+   * 4. **fsElementEventColorIcon**: Triggers when a color indicator is found
+   *    - Extracts background color from style attribute
+   *    - Maps color to food category using COLOR_MAPPINGS
+   *    - Sets the category on the current menu item
+   *
+   * 5. **fsCalendarEventTitle**: Triggers when menu item text is found
+   *    - Extracts menu item name from title attribute
+   *    - Filters out administrative announcements (no school, breaks, etc.)
+   *    - Parses text to separate main dish name from full description
+   *    - Sets name and description on the current menu item
+   *
+   * State Management:
+   * - Uses a state object to track current day box and menu item
+   * - Handlers complete previous items before starting new ones
+   * - Final cleanup ensures last day box and menu item are saved
+   * - Converts accumulated day boxes to DailyMenu objects
+   *
+   * Key Challenges:
+   * - HTMLRewriter is event-driven and asynchronous
+   * - State must be carefully managed across multiple nested elements
+   * - Need to know when to "complete" menu items vs. continue accumulating data
+   * - Multiple menu items per day require proper completion logic
+   * - Elements are processed in document order, but we need to build hierarchical data
    */
   private async parseCalendarFragment(response: Response, mealType: MealType): Promise<DailyMenu[]> {
-    const state = new ScraperState(mealType);
+    const dailyMenus: DailyMenu[] = [];
+    const dayBoxes: Array<{ date: Date | null; menuItems: MenuItemData[] }> = [];
 
-    // Set up HTMLRewriter with all handlers
+    // Create a state object to avoid closure capture issues
+    const state = {
+      currentDayBox: null as { date: Date | null; menuItems: MenuItemData[] } | null,
+      currentMenuItem: null as MenuItemData | null,
+    };
+
+    // Helper function to parse menu item text
+    const parseMenuItemText = (text: string): { name: string; description: string } => {
+      const cleanText = text.replace(/&amp;/g, "&").replace(/&#39;/g, "'");
+      const parts = cleanText.split(/\s+with\s+/);
+      if (parts.length > 1) {
+        const name = parts[0].trim();
+        return { name, description: cleanText };
+      } else {
+        return { name: cleanText, description: cleanText };
+      }
+    };
+
+    // Set up HTMLRewriter with simplified handlers
     const rewriter = new HTMLRewriter()
       .on("div.fsCalendarDaybox", {
         element(element: Element) {
+          // Complete previous day box if we have one
+          if (state.currentDayBox) {
+            // Complete any pending menu item
+            if (state.currentMenuItem && state.currentMenuItem.name) {
+              state.currentDayBox.menuItems.push(state.currentMenuItem);
+            }
+            // Save the day box if it has valid data
+            if (state.currentDayBox.date && state.currentDayBox.menuItems.length > 0) {
+              dayBoxes.push(state.currentDayBox);
+            }
+          }
+
           // Skip weekend boxes (but not out-of-range dates)
           const classNames = element.getAttribute("class") || "";
           if (classNames.includes("fsCalendarWeekendDayBox")) {
+            state.currentDayBox = null;
+            state.currentMenuItem = null;
             return;
           }
 
-          // Start a new day box (don't close previous one yet - let content finish processing)
-          state.startDayBox();
+          // Check if this daybox has events before starting
+          const hasEvents = classNames.includes("fsStateHasEvents");
+          if (hasEvents) {
+            // Start a new day box
+            state.currentDayBox = { date: null, menuItems: [] };
+            state.currentMenuItem = null;
+          } else {
+            state.currentDayBox = null;
+            state.currentMenuItem = null;
+          }
         },
       })
       .on("div.fsCalendarDate", {
@@ -300,11 +255,11 @@ export class StreamingScraper {
           // Handle zero-based months (0=January, 1=February, etc.)
           const adjustedMonth = month >= 0 ? month + 1 : 0;
 
-          // Validate date components
-          if (day > 0 && adjustedMonth > 0 && year > 0) {
+          // Validate date components and set on current day box
+          if (day > 0 && adjustedMonth > 0 && year > 0 && state.currentDayBox) {
             try {
               const date = new Date(year, adjustedMonth - 1, day);
-              state.setDateInfo(date);
+              state.currentDayBox.date = date;
             } catch {
               // Invalid date, skip
             }
@@ -313,47 +268,96 @@ export class StreamingScraper {
       })
       .on("div.fsCalendarInfo", {
         element(element: Element) {
-          state.startMenuItem();
+          // Complete previous menu item if we have one
+          if (state.currentMenuItem && state.currentMenuItem.name && state.currentDayBox) {
+            state.currentDayBox.menuItems.push(state.currentMenuItem);
+          }
+
+          // Start new menu item if we have a current day box
+          if (state.currentDayBox) {
+            state.currentMenuItem = {
+              name: "",
+              description: "",
+              category: FoodCategory.OTHER,
+              allergens: [],
+              nutritionalInfo: {},
+            };
+          }
         },
       })
       .on("span.fsElementEventColorIcon", {
         element(element: Element) {
-          const style = element.getAttribute("style") || "";
-          const colorMatch = style.match(/background:\s*([^;]+)/);
+          if (state.currentMenuItem) {
+            const style = element.getAttribute("style") || "";
+            const colorMatch = style.match(/background:\s*([^;]+)/);
 
-          if (colorMatch) {
-            const color = colorMatch[1].trim().toUpperCase();
-            const category = StreamingScraper.COLOR_MAPPINGS[color] || FoodCategory.OTHER;
-            state.setMenuItemCategory(category);
+            if (colorMatch) {
+              const color = colorMatch[1].trim().toUpperCase();
+              const category = StreamingScraper.COLOR_MAPPINGS[color] || FoodCategory.OTHER;
+              state.currentMenuItem.category = category;
+            }
           }
         },
       })
       .on("a.fsCalendarEventTitle", {
         element(element: Element) {
-          let title = (element.getAttribute("title") || "").trim();
-          if (title) {
-            // Decode HTML entities properly
-            title = title
-              .replace(/&amp;/g, "&")
-              .replace(/&#39;/g, "'")
-              .replace(/&quot;/g, '"');
-            state.setMenuItemTitle(title);
+          if (state.currentMenuItem) {
+            let title = (element.getAttribute("title") || "").trim();
+            if (title) {
+              // Decode HTML entities properly
+              title = title
+                .replace(/&amp;/g, "&")
+                .replace(/&#39;/g, "'")
+                .replace(/&quot;/g, '"');
+
+              // Filter out administrative announcements
+              const lowerTitle = title.toLowerCase();
+              const isAdminAnnouncement =
+                lowerTitle.includes("no school") ||
+                lowerTitle.includes("winter break") ||
+                lowerTitle.includes("last day of school") ||
+                lowerTitle.includes("memorial day") ||
+                lowerTitle.includes("teacher") ||
+                lowerTitle.includes("spring break") ||
+                lowerTitle.includes("quarter ends");
+
+              if (!isAdminAnnouncement) {
+                const { name, description } = parseMenuItemText(title);
+                state.currentMenuItem.name = name;
+                state.currentMenuItem.description = description;
+              }
+            }
           }
         },
       });
 
     // Process the response
     const transformedResponse = rewriter.transform(response);
-
-    // We need to consume the response to trigger the handlers
     await transformedResponse.text();
 
-    // Complete any remaining items
-    state.endMenuItem();
-    state.endDayBox();
+    // Complete final day box
+    if (state.currentDayBox) {
+      if (state.currentMenuItem && state.currentMenuItem.name) {
+        state.currentDayBox.menuItems.push(state.currentMenuItem);
+      }
+      if (state.currentDayBox.date && state.currentDayBox.menuItems.length > 0) {
+        dayBoxes.push(state.currentDayBox);
+      }
+    }
 
-    // Return the parsed results
-    return state.getCompletedDays();
+    // Convert day boxes to daily menus
+    for (const dayBox of dayBoxes) {
+      if (dayBox.date && dayBox.menuItems.length > 0) {
+        const dailyMenu = new DailyMenu({
+          date: format(dayBox.date, "yyyy-MM-dd"),
+          mealType: mealType,
+          menuItems: dayBox.menuItems.map((itemData) => new MenuItem(itemData)),
+        });
+        dailyMenus.push(dailyMenu);
+      }
+    }
+
+    return dailyMenus;
   }
 
   /**
