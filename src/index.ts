@@ -240,13 +240,35 @@ const halfHorizontalLayout = (menu: WeeklyMenu) => html`
   </div>
 `;
 
-const halfVerticalLayout = (menu: WeeklyMenu) => html`
-  <div class="layout layout--top"></div>
+// Helper function to get the next weekday
+function getNextWeekday(weekday: Weekday): Weekday | null {
+  if (weekday >= Weekday.FRIDAY) {
+    return null; // No next weekday in the same week
+  }
+  return (weekday + 1) as Weekday;
+}
 
-  <div class="title_bar">
-    <span class="title">BVSD Lunch Menu - Crest View Elementary</span>
-  </div>
-`;
+// Helper function to get the two days to show for half vertical layout
+function getHalfVerticalWeekdays(date: Date): { first: Weekday; second: Weekday | null } {
+  const firstWeekday = getQuadrantWeekday(date);
+  const secondWeekday = getNextWeekday(firstWeekday);
+
+  return { first: firstWeekday, second: secondWeekday };
+}
+
+const halfVerticalLayout = (menu: WeeklyMenu) => {
+  const { first, second } = getHalfVerticalWeekdays(currentDate());
+
+  return html`
+    <div class="layout layout--stretch-y columns text--center">
+      ${createWeekdayColumn(menu, first)} ${second ? createWeekdayColumn(menu, second) : ""}
+    </div>
+
+    <div class="title_bar">
+      <span class="title">BVSD Lunch Menu - Crest View Elementary</span>
+    </div>
+  `;
+};
 
 // Helper function to determine which weekday to show for quadrant layout
 function getQuadrantWeekday(date: Date): Weekday {
