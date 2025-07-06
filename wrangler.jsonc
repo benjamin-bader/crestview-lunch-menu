@@ -12,6 +12,19 @@
     "binding": "ASSETS",
     "directory": "./public",
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bvsd-trmnl-users",
+      "database_id": "b9fb202e-b4f4-43a6-ab0e-dea256b2a9a9",
+    },
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "BVSD_TRMNL_USERS",
+      "id": "fc47cec27b2741a980b0670a3edf75d0",
+    },
+  ],
   "observability": {
     "enabled": true,
   },

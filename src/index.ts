@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { html } from "hono/html";
-import { MealType, DailyMenu, DailyMeals, MonthlyMenu, TrmnlUser, Weekday, WeeklyMenu, getWeekdayName } from "./models";
+import { TrmnlUser } from "./db";
+import { MealType, DailyMenu, DailyMeals, MonthlyMenu, Weekday, WeeklyMenu, getWeekdayName } from "./models";
 import { StreamingScraper } from "./streaming_scraper";
 import { format, addDays } from "date-fns";
 
@@ -26,30 +27,82 @@ app.get("/api/install", async (c) => {
   const code = c.req.query("code");
   const callbackUrl = c.req.query("installation_callback_url");
 
+  if (!code || !callbackUrl) {
+    return c.json({ error: "Missing required parameters" }, 400);
+  }
+
   const body = {
-    code: "",
+    code,
     client_id: c.env.CLIENT_ID,
     client_secret: c.env.CLIENT_SECRET,
     grant_type: "authorization_code",
   };
 
-  // POST this body to https://api.trmnl.com/oauth/token
-  const response = await fetch("https://api.trmnl.com/oauth/token", {
+  const payload = JSON.stringify(body);
+
+  const response = await fetch("https://usetrmnl.com/oauth/token", {
     method: "POST",
-    body: JSON.stringify(body),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: payload,
   });
 
   const data: Record<string, any> = await response.json();
-  const accessToken = data["access_token"] as string;
+  const accessToken = data.access_token as string;
+
+  const user = new TrmnlUser({ accessToken, uuid: null, pluginSettingId: null });
+  await user.create(c.env.DB);
+
+  return c.redirect(callbackUrl);
 });
 
 app.post("/api/install-success", async (c) => {
-  c.req.json();
-  return c.redirect("/");
+  console.log("install-success");
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  console.log("authHeader", authHeader);
+  const accessToken = authHeader.split(" ")[1];
+  if (!accessToken) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  console.log("accessToken", accessToken);
+  const user = await TrmnlUser.findByAccessToken(c.env.DB, accessToken);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const payload = await c.req.json();
+  console.log("payload", payload);
+  const { uuid, plugin_setting_id } = payload.user;
+  if (!uuid || !plugin_setting_id) {
+    return c.json({ error: "Missing required parameters" }, 400);
+  }
+
+  await user.setUuidAndPluginSettingId(c.env.DB, uuid as string, plugin_setting_id as number);
+
+  return c.json({ success: true });
 });
 
 app.post("/api/uninstall", async (c) => {
-  return c.redirect("/");
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+
+  const { user_uuid } = await c.req.json();
+
+  if (accessToken && user_uuid) {
+    TrmnlUser.deleteByUuidAndAccessToken(c.env.DB, user_uuid, accessToken);
+  }
+
+  return c.json({ success: true });
 });
 
 app.get("/message", (c) => {
@@ -354,10 +407,15 @@ app.get("/api/debug-layout", async (c) => {
 });
 
 app.post("/api/markup", async (c) => {
-  const token = c.req.header("Authorization");
+  const authHeader = c.req.header("Authorization");
   const uuid = c.req.query("uuid");
 
-  if (!token || !uuid) {
+  if (!authHeader || !uuid) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  if (!accessToken) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 

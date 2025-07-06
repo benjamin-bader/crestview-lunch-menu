@@ -361,25 +361,6 @@ export class MonthlyMenu {
   }
 }
 
-export interface TrmnlUserData {
-  uuid: string;
-  pluginSettingId: string;
-}
-
-export class TrmnlUser {
-  public readonly uuid: string;
-  public readonly pluginSettingId: string;
-
-  constructor(data: TrmnlUserData) {
-    this.uuid = data.uuid;
-    this.pluginSettingId = data.pluginSettingId;
-  }
-
-  static keyOf(uuid: string): string {
-    return `trmnl-user/${uuid}`;
-  }
-}
-
 // Common menu items (equivalent to COMMON_MENU_ITEMS)
 export const COMMON_MENU_ITEMS = {
   spaghettiMeatballs: new MenuItem({
