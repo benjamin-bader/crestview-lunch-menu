@@ -58,26 +58,22 @@ app.get("/api/install", async (c) => {
 });
 
 app.post("/api/install-success", async (c) => {
-  console.log("install-success");
   const authHeader = c.req.header("Authorization");
   if (!authHeader) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  console.log("authHeader", authHeader);
   const accessToken = authHeader.split(" ")[1];
   if (!accessToken) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  console.log("accessToken", accessToken);
   const user = await TrmnlUser.findByAccessToken(c.env.DB, accessToken);
   if (!user) {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
   const payload = await c.req.json();
-  console.log("payload", payload);
   const { uuid, plugin_setting_id } = payload.user;
   if (!uuid || !plugin_setting_id) {
     return c.json({ error: "Missing required parameters" }, 400);
@@ -96,10 +92,13 @@ app.post("/api/uninstall", async (c) => {
 
   const accessToken = authHeader.split(" ")[1];
 
-  const { user_uuid } = await c.req.json();
+  const payload = await c.req.json();
+  const { user_uuid } = payload
 
   if (accessToken && user_uuid) {
     TrmnlUser.deleteByUuidAndAccessToken(c.env.DB, user_uuid, accessToken);
+  } else {
+    console.error("Missing required parameters", payload);
   }
 
   return c.json({ success: true });
