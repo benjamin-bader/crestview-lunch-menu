@@ -232,13 +232,22 @@ const fullLayout = (menu: WeeklyMenu) => html`
   </div>
 `;
 
-const halfHorizontalLayout = (menu: WeeklyMenu) => html`
-  <div class="layout layout--top"></div>
+const halfHorizontalLayout = (menu: WeeklyMenu) => {
+  const { first, second } = getHalfVerticalWeekdays(currentDate());
 
-  <div class="title_bar">
-    <span class="title">BVSD Lunch Menu - Crest View Elementary</span>
-  </div>
-`;
+  return html`
+    <div class="layout layout--stretch-y">
+      <div class="columns">
+        ${createQuadrantColumn(menu, first)}
+        ${second ? createQuadrantColumn(menu, second) : html`<div class="column"></div>`}
+      </div>
+    </div>
+
+    <div class="title_bar">
+      <span class="title">BVSD Lunch Menu - Crest View Elementary</span>
+    </div>
+  `;
+};
 
 // Helper function to get the next weekday
 function getNextWeekday(weekday: Weekday): Weekday | null {
