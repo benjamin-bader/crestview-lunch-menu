@@ -408,16 +408,21 @@ app.get("/api/debug-layout", async (c) => {
 app.post("/api/markup", async (c) => {
   console.log("markup BEGIN");
   const authHeader = c.req.header("Authorization");
-  const uuid = c.req.query("uuid");
+  let uuid = c.req.query("uuid");
+  if (!uuid) {
+    console.log("No uuid in query params, checking form data");
+    const body = await c.req.formData();
+    uuid = body.get("user_uuid") as string;
+  }
 
   if (!authHeader || !uuid) {
-    console.error("Unauthorized", authHeader, uuid);
+    console.error("Unauthorized; missing header or uuid", authHeader, uuid);
     return c.json({ error: "Unauthorized" }, 401);
   }
 
   const accessToken = authHeader.split(" ")[1];
   if (!accessToken) {
-    console.error("Unauthorized", authHeader, uuid);
+    console.error("Unauthorized; malformed header", authHeader, uuid);
     return c.json({ error: "Unauthorized" }, 401);
   }
 
