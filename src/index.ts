@@ -10,7 +10,7 @@ const app = new Hono<{ Bindings: CloudflareBindings }>();
 const MENU_PATH = "menus/cve.json";
 const MARKUP_PATH = "markup/cve.json";
 
-let FAKE_NOW: Date | null = null;
+let FAKE_NOW: Date | null = new Date("2025-03-01");// null;
 
 const currentDate = () => FAKE_NOW || new Date();
 
@@ -93,7 +93,7 @@ app.post("/api/uninstall", async (c) => {
   const accessToken = authHeader.split(" ")[1];
 
   const payload = await c.req.json();
-  const { user_uuid } = payload
+  const { user_uuid } = payload;
 
   if (accessToken && user_uuid) {
     TrmnlUser.deleteByUuidAndAccessToken(c.env.DB, user_uuid, accessToken);
@@ -451,6 +451,12 @@ app.post("/api/markup", async (c) => {
   };
 
   return c.json(markup);
+});
+
+// Catch-all fallback route
+app.all("*", (c) => {
+  console.log("No handler matched:", c.req.method, new URL(c.req.url).pathname);
+  return c.text("Matched, but not found", 404);
 });
 
 export default {
