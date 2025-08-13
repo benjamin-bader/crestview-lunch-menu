@@ -10,7 +10,7 @@ const app = new Hono<{ Bindings: CloudflareBindings }>();
 const MENU_PATH = "menus/cve.json";
 const MARKUP_PATH = "markup/cve.json";
 
-let FAKE_NOW: Date | null = new Date("2025-03-01");// null;
+let FAKE_NOW: Date | null = null;
 
 const currentDate = () => FAKE_NOW || new Date();
 
