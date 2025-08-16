@@ -348,10 +348,15 @@ export class StreamingScraper {
     // Convert day boxes to daily menus
     for (const dayBox of dayBoxes) {
       if (dayBox.date && dayBox.menuItems.length > 0) {
+        // Deduplicate menu items by name to handle source website duplicates
+        const uniqueMenuItems = dayBox.menuItems.filter((item, index, array) => {
+          return array.findIndex(existingItem => existingItem.name === item.name) === index;
+        });
+
         const dailyMenu = new DailyMenu({
           date: format(dayBox.date, "yyyy-MM-dd"),
           mealType: mealType,
-          menuItems: dayBox.menuItems.map((itemData) => new MenuItem(itemData)),
+          menuItems: uniqueMenuItems.map((itemData) => new MenuItem(itemData)),
         });
         dailyMenus.push(dailyMenu);
       }
