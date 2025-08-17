@@ -349,10 +349,22 @@ export class StreamingScraper {
     for (const dayBox of dayBoxes) {
       if (dayBox.date && dayBox.menuItems.length > 0) {
         // Deduplicate menu items by name to handle source website duplicates
+        // Also handle dietary variations (e.g., "Beef Nachos" vs "Beef Nachos GF DF")
         const uniqueMenuItems = dayBox.menuItems.filter((item, index, array) => {
-          return array.findIndex(existingItem => existingItem.name === item.name) === index;
+          return array.findIndex(existingItem => {
+            // Exact match
+            if (existingItem.name === item.name) {
+              return true;
+            }
+            
+            // Check if one is a dietary variation of the other
+            const baseName1 = item.name.replace(/\s+(GF|DF|V)\b/g, '').trim();
+            const baseName2 = existingItem.name.replace(/\s+(GF|DF|V)\b/g, '').trim();
+            
+            return baseName1 === baseName2;
+          }) === index;
         });
-
+        
         const dailyMenu = new DailyMenu({
           date: format(dayBox.date, "yyyy-MM-dd"),
           mealType: mealType,
