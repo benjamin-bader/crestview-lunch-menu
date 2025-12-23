@@ -201,13 +201,9 @@ export class StreamingScraper {
     // Helper function to parse menu item text
     const parseMenuItemText = (text: string): { name: string; description: string } => {
       const cleanText = text.replace(/&amp;/g, "&").replace(/&#39;/g, "'");
-      const parts = cleanText.split(/\s+with\s+/);
-      if (parts.length > 1) {
-        const name = parts[0].trim();
-        return { name, description: cleanText };
-      } else {
-        return { name: cleanText, description: cleanText };
-      }
+      // Use the full cleaned text as both name and description
+      // This preserves all information and lets deduplication handle variations
+      return { name: cleanText, description: cleanText };
     };
 
     // Set up HTMLRewriter with simplified handlers
@@ -348,8 +344,7 @@ export class StreamingScraper {
     // Convert day boxes to daily menus
     for (const dayBox of dayBoxes) {
       if (dayBox.date && dayBox.menuItems.length > 0) {
-        // Deduplicate menu items by name to handle source website duplicates
-        // Also handle dietary variations (e.g., "Beef Nachos" vs "Beef Nachos GF DF")
+        // Deduplicate menu items using smart comparison
         const uniqueMenuItems = dayBox.menuItems.filter((item, index, array) => {
           return array.findIndex(existingItem => {
             // Exact match
@@ -357,11 +352,21 @@ export class StreamingScraper {
               return true;
             }
             
-            // Check if one is a dietary variation of the other
-            const baseName1 = item.name.replace(/\s+(GF|DF|V)\b/g, '').trim();
-            const baseName2 = existingItem.name.replace(/\s+(GF|DF|V)\b/g, '').trim();
+            // Normalize names for comparison by removing dietary indicators and variations
+            const normalize = (name: string) => {
+              return name
+                .toLowerCase()
+                .replace(/\s*\(gf avail\)\s*/g, '') // Remove "(GF avail)"
+                .replace(/\s+(gf|df|v)\b/g, '') // Remove dietary indicators
+                .replace(/\s+with\s+.*$/, '') // Remove everything after "with"
+                .replace(/\s+or\s+.*$/, '') // Remove everything after "or" 
+                .trim();
+            };
             
-            return baseName1 === baseName2;
+            const normalizedName1 = normalize(item.name);
+            const normalizedName2 = normalize(existingItem.name);
+            
+            return normalizedName1 === normalizedName2;
           }) === index;
         });
         
